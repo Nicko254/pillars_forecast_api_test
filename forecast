@@ -247,35 +247,49 @@
     </div>
 <script>
     // Unified data management for both tools
-    const FinanceToolsData = {
-        // Storage keys
-        keys: {
-            FORECAST_DATA: 'financeTools_forecastData',
-            ACTUALS_DATA: 'financeTools_actualsData',
-            LEARNING_OUTCOMES: 'financeTools_learningOutcomes'
+   const FinanceToolsData = {
+  // Storage keys
+  keys: {
+    FORECAST_DATA: 'financeTools_forecastData',
+    ACTUALS_DATA: 'financeTools_actualsData',
+    LEARNING_OUTCOMES: 'financeTools_learningOutcomes'
+  },
+  
+  // Save forecast data
+  saveForecastData: async function(incomeStatementData, cashFlowData) {
+    try {
+      const data = {
+        incomeStatement: incomeStatementData,
+        cashFlow: cashFlowData,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      console.log("Saving forecast data:", data);
+
+      // Save to Google Sheets
+      const response = await fetch('https://script.google.com/macros/s/AKfycbzVRSl_cs6IkvJI93YCv9aAjtegxYN-uUoqZfH8_XMVttsObq7pYq2I8o_Urv9_9hTT/exec', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
         },
-        
-        // Save forecast data
-        saveForecastData: function(incomeStatementData, cashFlowData) {
-            try {
-                const data = {
-                    incomeStatement: incomeStatementData,
-                    cashFlow: cashFlowData,
-                    lastUpdated: new Date().toISOString()
-                };
-                
-                console.log("Saving forecast data:", data);
-                localStorage.setItem(this.keys.FORECAST_DATA, JSON.stringify(data));
-                
-                // Try to save to Wix DB if available
-                this.saveToWixDB('forecastData', data);
-                
-                return true;
-            } catch (error) {
-                console.error('Error saving forecast data:', error);
-                return false;
-            }
-        },
+        body: JSON.stringify({ userId: 'user1', data }) // Replace 'user1' with the actual user ID
+      });
+
+      if (response.ok) {
+        console.log('Data saved successfully to Google Sheets');
+      } else {
+        console.error('Error saving data to Google Sheets:', response.statusText);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error saving forecast data:', error);
+      return false;
+    }
+  },
+  // Other functions...
+};
+
         
         // Save actuals data
         saveActualsData: function(incomeStatementData, cashFlowData) {
