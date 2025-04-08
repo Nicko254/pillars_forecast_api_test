@@ -513,9 +513,42 @@
     }, 10000); // 2 second debounce
 
     // Wrapper function for the debounced save
-    async function saveForecastData() {
+   // Wrapper function for the debounced save
+async function saveForecastData() {
+  try {
+    // Get previous data from localStorage
+    const previousData = localStorage.getItem(FinanceToolsData.keys.FORECAST_DATA);
+    
+    // Prepare current data
+    const incomeStatementData = {
+      revenue: calculateSectionTotal('incomeStatementTool', 'Revenue'),
+      expenses: calculateSectionTotal('incomeStatementTool', 'Expenses'),
+      inputs: await saveInputData('incomeStatementTool')
+    };
+
+    const cashFlowData = {
+      inflows: calculateSectionTotal('cashFlowTool', 'Cash Inflows'),
+      outflows: calculateSectionTotal('cashFlowTool', 'Cash Outflows'),
+      inputs: await saveInputData('cashFlowTool')
+    };
+    
+    const currentData = {
+      incomeStatement: incomeStatementData,
+      cashFlow: cashFlowData,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Only save if data has changed
+    if (!previousData || JSON.stringify(currentData) !== previousData) {
+      console.log("Data changed, saving...");
       debouncedSaveForecastData();
+    } else {
+      console.log("No changes detected, skipping save");
     }
+  } catch (error) {
+    console.error("Error in saveForecastData:", error);
+  }
+}
 
     // UPDATED FUNCTION: Load saved data
     async function loadSavedData(toolId) {
