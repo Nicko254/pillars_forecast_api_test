@@ -151,6 +151,17 @@
     .scenario-button:hover {
       background-color: #5c7cfa;
     }
+    #save-status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      border-radius: 5px;
+      color: white;
+      font-weight: bold;
+      z-index: 1000;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -220,7 +231,34 @@
       <ul class="key-takeaways"></ul>
     </div>
   </div>
+  <div id="save-status"></div>
 <script>
+  // Helper function to debounce function calls
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Function to show save status to user
+  function showSaveStatus(success, message) {
+    const statusEl = document.getElementById('save-status');
+    
+    statusEl.textContent = message;
+    statusEl.style.backgroundColor = success ? '#4CAF50' : '#F44336';
+    statusEl.style.display = 'block';
+    
+    setTimeout(() => {
+      statusEl.style.display = 'none';
+    }, 3000);
+  }
+
   // Unified data management for both tools
   const FinanceToolsData = {
     // Storage keys
@@ -259,7 +297,7 @@
       }
     },
     
-    // Save forecast data to Google Sheets
+    // Save forecast data to Google Sheets with enhanced JSONP approach
     saveForecastData: async function(incomeStatementData, cashFlowData) {
       try {
         const data = {
@@ -280,27 +318,61 @@
           localStorage.setItem('financeTools_userId', userId);
         }
         
-        // Save to Google Sheets using JSONP approach to avoid CORS issues
-        const scriptUrl = 'https://script.google.com/macros/s/AKfycbzVRSl_cs6IkvJI93YCv9aAjtegxYN-uUoqZfH8_XMVttsObq7pYq2I8o_Urv9_9hTT/exec';
+        // Updated Google Apps Script URL
+        const scriptUrl = 'https://script.google.com/macros/s/AKfycbxY8yp1XaOkIAeOhi9d1snwQThz5eItFokb_UTw4Xq6RjM-UHFG-P9hN70B-m8STAJ7/exec';
         
-        // Create form data for the request
-        const formData = new FormData();
-        formData.append('userId', userId);
-        formData.append('data', JSON.stringify(data));
+        // Create a query string from our data
+        const queryString = `?userId=${encodeURIComponent(userId)}&data=${encodeURIComponent(JSON.stringify(data))}`;
         
-        // Use fetch with no-cors mode to send data
-        const response = await fetch(scriptUrl, {
-          method: 'POST',
-          mode: 'no-cors', // This is important for cross-domain requests
-          body: formData
+        // Return a promise that will resolve when the script has loaded or failed
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          
+          // Define a callback function that Google Apps Script can call
+          const callbackName = 'financeToolsCallback_' + new Date().getTime();
+          window[callbackName] = function(response) {
+            console.log('Received response from Google Sheets:', response);
+            if (response && response.success) {
+              showSaveStatus(true, "Data saved to Google Sheets");
+              resolve(true);
+            } else {
+              showSaveStatus(false, "Couldn't save to Google Sheets. Data saved locally.");
+              resolve(false); // Still resolve but with false to indicate failure
+            }
+            // Clean up
+            delete window[callbackName];
+            document.head.removeChild(script);
+          };
+          
+          // Set a timeout in case the script never loads
+          const timeoutId = setTimeout(() => {
+            console.error('Google Sheets save timed out');
+            if (document.head.contains(script)) {
+              document.head.removeChild(script);
+            }
+            delete window[callbackName];
+            showSaveStatus(false, "Save timed out. Data saved locally.");
+            resolve(false);
+          }, 10000); // 10 second timeout
+          
+          // Set up the script tag
+          script.src = `${scriptUrl}${queryString}&callback=${callbackName}`;
+          script.onerror = function(error) {
+            clearTimeout(timeoutId);
+            console.error('Error loading Google Sheets script:', error);
+            delete window[callbackName];
+            document.head.removeChild(script);
+            showSaveStatus(false, "Error connecting to Google Sheets. Data saved locally.");
+            resolve(false);
+          };
+          
+          // Add the script to the page
+          document.head.appendChild(script);
         });
-        
-        console.log('Data sent to Google Sheets');
-        return true;
       } catch (error) {
         console.error('Error saving forecast data to Google Sheets:', error);
-        // Still return true if local save was successful
-        return true;
+        showSaveStatus(false, "Error: " + error.message);
+        return false;
       }
     },
     
@@ -368,7 +440,11 @@
       'Rent': 'Costs for leasing business space',
       'Utilities': 'Expenses for electricity, water, internet, etc.',
       'Marketing': 'Advertising and promotional expenses',
-      'Other Expenses': 'Miscellaneous business expenses'
+      'Other Expenses': 'Miscellaneous business expenses',
+      'Investments': 'Capital received from investors',
+      'Expenses': 'Total operational expenses',
+      'Equipment Purchases': 'Costs for buying equipment and assets',
+      'Loan Payments': 'Repayment of loans including interest'
     };
     const tools = {
       incomeStatementTool: {
@@ -405,8 +481,8 @@
       return inputData;
     }
 
-    // UPDATED FUNCTION: Save forecast data
-    async function saveForecastData() {
+    // UPDATED FUNCTION: Save forecast data with debounce
+    const debouncedSaveForecastData = debounce(async function() {
       try {
         console.log("Saving forecast data...");
 
@@ -423,12 +499,22 @@
         };
 
         // Save using the unified storage system
-        await FinanceToolsData.saveForecastData(incomeStatementData, cashFlowData);
-
-        console.log("Forecast data saved successfully");
+        const saveResult = await FinanceToolsData.saveForecastData(incomeStatementData, cashFlowData);
+        
+        if (saveResult) {
+          console.log("Forecast data saved successfully");
+        } else {
+          console.warn("Google Sheets save failed, but data was saved locally");
+        }
       } catch (error) {
         console.error('Error saving forecast data:', error);
+        showSaveStatus(false, "Error saving data: " + error.message);
       }
+    }, 2000); // 2 second debounce
+
+    // Wrapper function for the debounced save
+    async function saveForecastData() {
+      debouncedSaveForecastData();
     }
 
     // UPDATED FUNCTION: Load saved data
@@ -480,6 +566,7 @@
           });
 
           calculateTotals(toolId);
+          showSaveStatus(true, "Data loaded successfully");
           return true;
         } else {
           console.log(`No data found for ${toolId}`);
@@ -488,6 +575,7 @@
         return false;
       } catch (error) {
         console.error('Error loading forecast data:', error);
+        showSaveStatus(false, "Error loading data: " + error.message);
         return false;
       }
     }
@@ -513,7 +601,7 @@
       });
     }
 
-       function createRow(toolId, section, category, isEditable = false) {
+    function createRow(toolId, section, category, isEditable = false) {
       const rowId = `${toolId}-${section.replace(/\s+/g, '')}-${category.replace(/\s+/g, '')}`;
       const tooltip = tooltips[category] || 'Custom category';
 
@@ -629,7 +717,7 @@
       return totalElement ? parseFloat(totalElement.textContent.replace('$', '')) || 0 : 0;
     }
 
-    // UPDATED: Calculate totals function
+    // UPDATED: Calculate totals function with improved precision
     function calculateTotals(toolId) {
       console.log(`Calculating totals for ${toolId}...`);
 
