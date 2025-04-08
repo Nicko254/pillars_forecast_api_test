@@ -319,7 +319,7 @@
         }
         
         // Updated Google Apps Script URL
-        const scriptUrl = 'https://script.google.com/macros/s/AKfycbxY8yp1XaOkIAeOhi9d1snwQThz5eItFokb_UTw4Xq6RjM-UHFG-P9hN70B-m8STAJ7/exec';
+        const scriptUrl = 'https://script.google.com/macros/s/AKfycbxtQ9FVCtz5etvbtorLaxy9Mkznflvc5v6jDLPvpzNgd82fj4iIyyodRDMzl5Wx4IrT/exec';
         
         // Create a query string from our data
         const queryString = `?userId=${encodeURIComponent(userId)}&data=${encodeURIComponent(JSON.stringify(data))}`;
@@ -510,7 +510,7 @@
         console.error('Error saving forecast data:', error);
         showSaveStatus(false, "Error saving data: " + error.message);
       }
-    }, 2000); // 2 second debounce
+    }, 10000); // 2 second debounce
 
     // Wrapper function for the debounced save
     async function saveForecastData() {
@@ -949,7 +949,7 @@
         console.log(`Performing periodic save for active tool: ${toolId}`);
         saveForecastData();
       }
-    }, 60000); // Check every minute
+    }, 300000); // Check every minute
   })();
 </script>
 </body>
