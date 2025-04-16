@@ -1003,16 +1003,7 @@ function handleInputBlur(event) {
   window.handleInputBlur = handleInputBlur;
   window.saveInputData = saveInputData; 
 
-  // Add a periodic data check to ensure data persistence
-  setInterval(() => {
-    const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
-    if (activeTool) {
-      const toolId = activeTool.id;
-      console.log(`Performing periodic save for active tool: ${toolId}`);
-      saveForecastData();
-    }
-  }, 300000); // Check every 5 minutes
-})();
+ 
 // Add a periodic data check to ensure data persistence
   setInterval(() => {
     const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
