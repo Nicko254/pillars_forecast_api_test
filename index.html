@@ -162,6 +162,19 @@
       z-index: 1000;
       display: none;
     }
+    .user-id-controls {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .user-id-controls button {
+      margin-right: 5px;
+    }
   </style>
 </head>
 <body>
@@ -232,8 +245,47 @@
     </div>
   </div>
   <div id="save-status"></div>
+  
+  <!-- Cross-device access controls -->
+  <div class="user-id-controls">
+    <button id="export-userid-btn" class="scenario-button">Export User ID</button>
+    <button id="import-userid-btn" class="scenario-button">Import User ID</button>
+  </div>
+  
 <script>
- // Helper function to debounce function calls
+// Functions for cross-device ID management
+function getUserId() {
+  let userId = localStorage.getItem('financeTools_userId');
+  if (!userId) {
+    userId = 'user_' + new Date().getTime();
+    localStorage.setItem('financeTools_userId', userId);
+  }
+  return userId;
+}
+
+function showUserId() {
+  const userId = getUserId();
+  alert("Your User ID is: " + userId + "\nSave this to access your data on other devices.");
+}
+
+function setUserId(customId) {
+  if (!customId) {
+    alert("Please enter a valid User ID");
+    return;
+  }
+  
+  localStorage.setItem('financeTools_userId', customId);
+  showSaveStatus(true, "User ID set successfully. Loading your data...");
+  
+  // Reload all data
+  setTimeout(() => {
+    loadAllData().then(() => {
+      alert("Data loaded successfully!");
+    });
+  }, 500);
+}
+
+// Helper function to debounce function calls
 function debounce(func, wait) {
   let timeout;
   return function executedFunction(...args) {
@@ -333,12 +385,8 @@ const FinanceToolsData = {
 // Function for direct saving to Google Sheets
 async function directSaveToGoogleSheets(incomeStatementData, cashFlowData) {
   try {
-    // Generate a unique user ID if not available
-    let userId = localStorage.getItem('financeTools_userId');
-    if (!userId) {
-      userId = 'user_' + new Date().getTime();
-      localStorage.setItem('financeTools_userId', userId);
-    }
+    // Get user ID using our centralized function
+    const userId = getUserId();
     
     const data = {
       incomeStatement: incomeStatementData,
@@ -420,6 +468,9 @@ async function saveForecastData() {
       outflows: calculateSectionTotal('cashFlowTool', 'Cash Outflows'),
       inputs: await saveInputData('cashFlowTool')  // This captures the current state of the inputs
     };
+
+    console.log("Saving income statement data:", incomeStatementData);
+    console.log("Saving cash flow data:", cashFlowData);
 
     // Force save directly to ensure immediate saving
     await directSaveToGoogleSheets(incomeStatementData, cashFlowData);
@@ -536,19 +587,33 @@ function handleInputBlur(event) {
     }
   };
 
-  // UPDATED FUNCTION: Save input data
+  // UPDATED FUNCTION: Save input data with better error handling
   async function saveInputData(toolId) {
     const tool = tools[toolId];
     const inputData = {};
+
+    if (!tool) {
+      console.warn(`Tool not found for ${toolId} when saving input data`);
+      return {};
+    }
 
     tool.sections.forEach(section => {
       inputData[section.name] = {};
 
       section.rows.forEach(row => {
         const inputs = document.querySelectorAll(`[data-tool="${toolId}"][data-section="${section.name}"][data-category="${row}"]`);
-        inputData[section.name][row] = Array.from(inputs).map(input => input.value || '');
+        
+        // Check if we have any inputs
+        if (inputs.length === 0) {
+          console.warn(`No inputs found for ${toolId} - ${section.name} - ${row}`);
+          inputData[section.name][row] = Array(12).fill(''); // Default to empty strings for 12 months
+        } else {
+          inputData[section.name][row] = Array.from(inputs).map(input => input.value || '');
+        }
       });
     });
+    
+    console.log(`Collected input data for ${toolId}:`, inputData);
     return inputData;
   }
 
@@ -569,6 +634,7 @@ function handleInputBlur(event) {
         const wixData = await FinanceToolsData.loadFromWixDB('forecastData');
         if (wixData) {
           toolData = toolId === 'incomeStatementTool' ? wixData.incomeStatement : wixData.cashFlow;
+          console.log(`Found Wix data for ${toolId}:`, toolData);
         }
       } catch (wixError) {
         console.error('Error loading from Wix DB:', wixError);
@@ -577,8 +643,11 @@ function handleInputBlur(event) {
       // If no Wix data, try localStorage
       if (!toolData || !toolData.inputs) {
         const savedData = FinanceToolsData.loadForecastData();
+        console.log(`Loading from localStorage for ${toolId}:`, savedData);
+        
         if (savedData) {
           toolData = toolId === 'incomeStatementTool' ? savedData.incomeStatement : savedData.cashFlow;
+          console.log(`Extracted toolData for ${toolId}:`, toolData);
         }
       }
 
@@ -615,7 +684,7 @@ function handleInputBlur(event) {
     }
   }
 
-  // UPDATED FUNCTION: Toggle tool
+  // UPDATED FUNCTION: Toggle tool with explicit data loading
   function toggleTool(toolId) {
     Object.keys(tools).forEach(key => {
       const tool = document.getElementById(key);
@@ -626,8 +695,12 @@ function handleInputBlur(event) {
 
           if (wasHidden) {
             console.log(`Showing ${toolId} and loading data...`);
-            // Always load saved data when showing a tool
-            loadSavedData(toolId);
+            // Force a fresh load of saved data when showing a tool
+            setTimeout(() => {
+              loadSavedData(toolId).then(() => {
+                console.log(`Finished loading data for ${toolId}`);
+              });
+            }, 100);
           }
         } else {
           tool.style.display = 'none';
@@ -723,7 +796,7 @@ function handleInputBlur(event) {
     setTimeout(attachSaveHandlers, 100);
   }
 
-  function addRow(toolId, section) {
+ function addRow(toolId, section) {
     const table = document.getElementById(tools[toolId].table);
     const sectionRows = Array.from(table.querySelectorAll(`tr`)).filter(row => 
       row.id && row.id.startsWith(`${toolId}-${section.replace(/\s+/g, '')}-`)
@@ -880,7 +953,6 @@ function handleInputBlur(event) {
     const taxAmount = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
     const netTotal = profitBeforeTax - taxAmount;
     const profitMargin = totalRevenue > 0 ? (netTotal / totalRevenue) * 100 : 0;
-    // Continuing from previous part
     financialSummary.innerHTML = `
       <div>Total ${tools[toolId].sections[0].name}: $${totalRevenue.toFixed(2)}</div>
       <div>Total ${tools[toolId].sections[1].name}: $${totalExpenses.toFixed(2)}</div>
@@ -951,6 +1023,18 @@ function handleInputBlur(event) {
       toggleTool('cashFlowTool');
     });
 
+    // Set up user ID export/import buttons event listeners
+    document.getElementById('export-userid-btn').addEventListener('click', function() {
+      showUserId();
+    });
+
+    document.getElementById('import-userid-btn').addEventListener('click', function() {
+      const customId = prompt("Enter the User ID you want to import:");
+      if (customId) {
+        setUserId(customId);
+      }
+    });
+
     // Initialize Wix integration
     initWixIntegration();
 
@@ -984,6 +1068,7 @@ function handleInputBlur(event) {
     console.log("Current localStorage:", {
       forecast: localStorage.getItem('financeTools_forecastData'),
       actuals: localStorage.getItem('financeTools_actualsData'),
+      userId: getUserId()
     });
   });
 
@@ -1001,10 +1086,12 @@ function handleInputBlur(event) {
   window.initializeTool = initializeTool;
   window.attachSaveHandlers = attachSaveHandlers;
   window.handleInputBlur = handleInputBlur;
-  window.saveInputData = saveInputData; 
+  window.saveInputData = saveInputData;
+  window.showUserId = showUserId;
+  window.setUserId = setUserId;
+  window.getUserId = getUserId;
 
- 
-// Add a periodic data check to ensure data persistence
+  // Add a periodic data check to ensure data persistence
   setInterval(() => {
     const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
     if (activeTool) {
