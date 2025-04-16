@@ -233,757 +233,782 @@
   </div>
   <div id="save-status"></div>
 <script>
-  // Helper function to debounce function calls
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
+ // Helper function to debounce function calls
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
       clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
+      func(...args);
     };
-  }
-
-  // Function to show save status to user
-  function showSaveStatus(success, message) {
-    const statusEl = document.getElementById('save-status');
-    
-    statusEl.textContent = message;
-    statusEl.style.backgroundColor = success ? '#4CAF50' : '#F44336';
-    statusEl.style.display = 'block';
-    
-    setTimeout(() => {
-      statusEl.style.display = 'none';
-    }, 3000);
-  }
-
-  // Unified data management for both tools
-  const FinanceToolsData = {
-    // Storage keys
-    keys: {
-      FORECAST_DATA: 'financeTools_forecastData',
-      ACTUALS_DATA: 'financeTools_actualsData',
-      LEARNING_OUTCOMES: 'financeTools_learningOutcomes'
-    },
-
-    // Save forecast data to localStorage (backup)
-    saveForecastDataLocally: function(incomeStatementData, cashFlowData) {
-      try {
-        const data = {
-          incomeStatement: incomeStatementData,
-          cashFlow: cashFlowData,
-          lastUpdated: new Date().toISOString()
-        };
-        
-        localStorage.setItem(this.keys.FORECAST_DATA, JSON.stringify(data));
-        console.log("Data saved locally:", data);
-        return true;
-      } catch (error) {
-        console.error('Error saving data locally:', error);
-        return false;
-      }
-    },
-    
-    // Load forecast data from localStorage
-    loadForecastData: function() {
-      try {
-        const data = localStorage.getItem(this.keys.FORECAST_DATA);
-        return data ? JSON.parse(data) : null;
-      } catch (error) {
-        console.error('Error loading forecast data from localStorage:', error);
-        return null;
-      }
-    },
-    
-    // Save forecast data to Google Sheets with enhanced JSONP approach
-    saveForecastData: async function(incomeStatementData, cashFlowData) {
-      try {
-        const data = {
-          incomeStatement: incomeStatementData,
-          cashFlow: cashFlowData,
-          lastUpdated: new Date().toISOString()
-        };
-
-        console.log("Saving forecast data:", data);
-        
-        // First save locally as backup
-        this.saveForecastDataLocally(incomeStatementData, cashFlowData);
-        
-        // Generate a unique user ID if not available
-        let userId = localStorage.getItem('financeTools_userId');
-        if (!userId) {
-          userId = 'user_' + new Date().getTime();
-          localStorage.setItem('financeTools_userId', userId);
-        }
-        
-        // Updated Google Apps Script URL
-        const scriptUrl = 'https://script.google.com/macros/s/AKfycbxtQ9FVCtz5etvbtorLaxy9Mkznflvc5v6jDLPvpzNgd82fj4iIyyodRDMzl5Wx4IrT/exec';
-        
-        // Create a query string from our data
-        const queryString = `?userId=${encodeURIComponent(userId)}&data=${encodeURIComponent(JSON.stringify(data))}`;
-        
-        // Return a promise that will resolve when the script has loaded or failed
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          
-          // Define a callback function that Google Apps Script can call
-          const callbackName = 'financeToolsCallback_' + new Date().getTime();
-          window[callbackName] = function(response) {
-            console.log('Received response from Google Sheets:', response);
-            if (response && response.success) {
-              showSaveStatus(true, "Data saved to Google Sheets");
-              resolve(true);
-            } else {
-              showSaveStatus(false, "Couldn't save to Google Sheets. Data saved locally.");
-              resolve(false); // Still resolve but with false to indicate failure
-            }
-            // Clean up
-            delete window[callbackName];
-            document.head.removeChild(script);
-          };
-          
-          // Set a timeout in case the script never loads
-          const timeoutId = setTimeout(() => {
-            console.error('Google Sheets save timed out');
-            if (document.head.contains(script)) {
-              document.head.removeChild(script);
-            }
-            delete window[callbackName];
-            showSaveStatus(false, "Save timed out. Data saved locally.");
-            resolve(false);
-          }, 10000); // 10 second timeout
-          
-          // Set up the script tag
-          script.src = `${scriptUrl}${queryString}&callback=${callbackName}`;
-          script.onerror = function(error) {
-            clearTimeout(timeoutId);
-            console.error('Error loading Google Sheets script:', error);
-            delete window[callbackName];
-            document.head.removeChild(script);
-            showSaveStatus(false, "Error connecting to Google Sheets. Data saved locally.");
-            resolve(false);
-          };
-          
-          // Add the script to the page
-          document.head.appendChild(script);
-        });
-      } catch (error) {
-        console.error('Error saving forecast data to Google Sheets:', error);
-        showSaveStatus(false, "Error: " + error.message);
-        return false;
-      }
-    },
-    
-    // Load data from Wix DB if available
-    loadFromWixDB: async function(dataType) {
-      try {
-        if (typeof wix === 'undefined') {
-          console.log('Wix not available, skipping DB load');
-          return null;
-        }
-        
-        // This is a placeholder - actual implementation would depend on your Wix setup
-        console.log('Loading data from Wix DB:', dataType);
-        return null;
-      } catch (error) {
-        console.error('Error loading from Wix DB:', error);
-        return null;
-      }
-    }
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
   };
+}
 
-  // Initialize Wix if it's available
-  function initWixIntegration() {
-    if (typeof wix !== 'undefined') {
-      try {
-        // Listen for user login events
-        wix.users.onLogin((user) => {
-          console.log('User logged in, refreshing data');
-          loadAllData();
-        });
+// Function to show save status to user
+function showSaveStatus(success, message) {
+  const statusEl = document.getElementById('save-status');
+  
+  statusEl.textContent = message;
+  statusEl.style.backgroundColor = success ? '#4CAF50' : '#F44336';
+  statusEl.style.display = 'block';
+  
+  setTimeout(() => {
+    statusEl.style.display = 'none';
+  }, 3000);
+}
 
-        // Check if user is already logged in
-        wix.users.currentUser
-          .then(user => {
-            if (user) {
-              console.log('User already logged in');
-            }
-          })
-          .catch(error => {
-            console.warn('Error checking current user:', error);
-          });
-      } catch (error) {
-        console.warn('Error initializing Wix integration:', error);
+// Unified data management for both tools
+const FinanceToolsData = {
+  // Storage keys
+  keys: {
+    FORECAST_DATA: 'financeTools_forecastData',
+    ACTUALS_DATA: 'financeTools_actualsData',
+    LEARNING_OUTCOMES: 'financeTools_learningOutcomes'
+  },
+
+  // Save forecast data to localStorage (backup)
+  saveForecastDataLocally: function(incomeStatementData, cashFlowData) {
+    try {
+      const data = {
+        incomeStatement: incomeStatementData,
+        cashFlow: cashFlowData,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      localStorage.setItem(this.keys.FORECAST_DATA, JSON.stringify(data));
+      console.log("Data saved locally:", data);
+      return true;
+    } catch (error) {
+      console.error('Error saving data locally:', error);
+      return false;
+    }
+  },
+  
+  // Load forecast data from localStorage
+  loadForecastData: function() {
+    try {
+      const data = localStorage.getItem(this.keys.FORECAST_DATA);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      console.error('Error loading forecast data from localStorage:', error);
+      return null;
+    }
+  },
+  
+  // Save forecast data to Google Sheets - updated method
+  saveForecastData: async function(incomeStatementData, cashFlowData) {
+    try {
+      // First save locally as backup
+      this.saveForecastDataLocally(incomeStatementData, cashFlowData);
+      
+      // Then save to Google Sheets directly
+      return await directSaveToGoogleSheets(incomeStatementData, cashFlowData);
+    } catch (error) {
+      console.error('Error saving forecast data to Google Sheets:', error);
+      showSaveStatus(false, "Error: " + error.message);
+      return false;
+    }
+  },
+  
+  // Load data from Wix DB if available
+  loadFromWixDB: async function(dataType) {
+    try {
+      if (typeof wix === 'undefined') {
+        console.log('Wix not available, skipping DB load');
+        return null;
       }
-    } else {
-      console.log("Wix APIs not detected");
+      
+      // This is a placeholder - actual implementation would depend on your Wix setup
+      console.log('Loading data from Wix DB:', dataType);
+      return null;
+    } catch (error) {
+      console.error('Error loading from Wix DB:', error);
+      return null;
     }
   }
+};
 
-  // Load all data from storage (both localStorage and Wix if available)
-  async function loadAllData() {
-    console.log("Loading all data");
-    // Load forecast data
-    await loadSavedData('incomeStatementTool');
-    await loadSavedData('cashFlowTool');
-  }
-
-  (function() {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const tooltips = {
-      'Sales': 'Revenue generated from primary business activities',
-      'Other Income': 'Revenue from secondary sources like investments or asset sales',
-      'Cost of Goods Sold': 'Direct costs of producing goods or services',
-      'Salaries': 'Employee wages and related expenses',
-      'Rent': 'Costs for leasing business space',
-      'Utilities': 'Expenses for electricity, water, internet, etc.',
-      'Marketing': 'Advertising and promotional expenses',
-      'Other Expenses': 'Miscellaneous business expenses',
-      'Investments': 'Capital received from investors',
-      'Expenses': 'Total operational expenses',
-      'Equipment Purchases': 'Costs for buying equipment and assets',
-      'Loan Payments': 'Repayment of loans including interest'
-    };
-    const tools = {
-      incomeStatementTool: {
-        table: 'incomeStatementTable',
-        chart: 'incomeStatementChart',
-        sections: [
-          { name: 'Revenue', rows: ['Sales', 'Other Income'] },
-          { name: 'Expenses', rows: ['Cost of Goods Sold', 'Salaries', 'Rent', 'Utilities', 'Marketing', 'Other Expenses'] }
-        ]
-      },
-      cashFlowTool: {
-        table: 'cashFlowTable',
-        chart: 'cashFlowChart',
-        sections: [
-          { name: 'Cash Inflows', rows: ['Sales', 'Investments', 'Other Income'] },
-          { name: 'Cash Outflows', rows: ['Expenses', 'Equipment Purchases', 'Loan Payments'] }
-        ]
-      }
-    };
-
-    // UPDATED FUNCTION: Save input data
-    async function saveInputData(toolId) {
-      const tool = tools[toolId];
-      const inputData = {};
-
-      tool.sections.forEach(section => {
-        inputData[section.name] = {};
-
-        section.rows.forEach(row => {
-          const inputs = document.querySelectorAll(`[data-tool="${toolId}"][data-section="${section.name}"][data-category="${row}"]`);
-          inputData[section.name][row] = Array.from(inputs).map(input => input.value || '');
-        });
-      });
-      return inputData;
-    }
-
-    // UPDATED FUNCTION: Save forecast data with debounce
-    const debouncedSaveForecastData = debounce(async function() {
-      try {
-        console.log("Saving forecast data...");
-
-        const incomeStatementData = {
-          revenue: calculateSectionTotal('incomeStatementTool', 'Revenue'),
-          expenses: calculateSectionTotal('incomeStatementTool', 'Expenses'),
-          inputs: await saveInputData('incomeStatementTool')
-        };
-
-        const cashFlowData = {
-          inflows: calculateSectionTotal('cashFlowTool', 'Cash Inflows'),
-          outflows: calculateSectionTotal('cashFlowTool', 'Cash Outflows'),
-          inputs: await saveInputData('cashFlowTool')
-        };
-
-        // Save using the unified storage system
-        const saveResult = await FinanceToolsData.saveForecastData(incomeStatementData, cashFlowData);
-        
-        if (saveResult) {
-          console.log("Forecast data saved successfully");
-        } else {
-          console.warn("Google Sheets save failed, but data was saved locally");
-        }
-      } catch (error) {
-        console.error('Error saving forecast data:', error);
-        showSaveStatus(false, "Error saving data: " + error.message);
-      }
-    }, 10000); // 2 second debounce
-
-    // Wrapper function for the debounced save
-   // Wrapper function for the debounced save
-async function saveForecastData() {
+// Function for direct saving to Google Sheets
+async function directSaveToGoogleSheets(incomeStatementData, cashFlowData) {
   try {
-    // Get previous data from localStorage
-    const previousData = localStorage.getItem(FinanceToolsData.keys.FORECAST_DATA);
+    // Generate a unique user ID if not available
+    let userId = localStorage.getItem('financeTools_userId');
+    if (!userId) {
+      userId = 'user_' + new Date().getTime();
+      localStorage.setItem('financeTools_userId', userId);
+    }
     
-    // Prepare current data
-    const incomeStatementData = {
-      revenue: calculateSectionTotal('incomeStatementTool', 'Revenue'),
-      expenses: calculateSectionTotal('incomeStatementTool', 'Expenses'),
-      inputs: await saveInputData('incomeStatementTool')
-    };
-
-    const cashFlowData = {
-      inflows: calculateSectionTotal('cashFlowTool', 'Cash Inflows'),
-      outflows: calculateSectionTotal('cashFlowTool', 'Cash Outflows'),
-      inputs: await saveInputData('cashFlowTool')
-    };
-    
-    const currentData = {
+    const data = {
       incomeStatement: incomeStatementData,
       cashFlow: cashFlowData,
       lastUpdated: new Date().toISOString()
     };
     
-    // Only save if data has changed
-    if (!previousData || JSON.stringify(currentData) !== previousData) {
-      console.log("Data changed, saving...");
-      debouncedSaveForecastData();
-    } else {
-      console.log("No changes detected, skipping save");
-    }
+    // Updated Google Apps Script URL
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwNVyPQf0eEGmlD0dqceVWfbJ8pCbIWQvZTGkgqivd54782XQMlSDI6dI83k-QLMEn_/exec';
+    
+    // Create a query string from our data
+    const queryString = `?userId=${encodeURIComponent(userId)}&data=${encodeURIComponent(JSON.stringify(data))}`;
+    
+    // Return a promise that will resolve when the script has loaded or failed
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      
+      // Define a callback function that Google Apps Script can call
+      const callbackName = 'financeToolsCallback_' + new Date().getTime();
+      window[callbackName] = function(response) {
+        console.log('Received response from Google Sheets:', response);
+        if (response && response.success) {
+          showSaveStatus(true, "Data saved to Google Sheets");
+          resolve(true);
+        } else {
+          showSaveStatus(false, "Couldn't save to Google Sheets. Data saved locally.");
+          resolve(false); // Still resolve but with false to indicate failure
+        }
+        // Clean up
+        delete window[callbackName];
+        document.head.removeChild(script);
+      };
+      
+      // Set a timeout in case the script never loads
+      const timeoutId = setTimeout(() => {
+        console.error('Google Sheets save timed out');
+        if (document.head.contains(script)) {
+          document.head.removeChild(script);
+        }
+        delete window[callbackName];
+        showSaveStatus(false, "Save timed out. Data saved locally.");
+        resolve(false);
+      }, 10000); // 10 second timeout
+      
+      // Set up the script tag
+      script.src = `${scriptUrl}${queryString}&callback=${callbackName}`;
+      script.onerror = function(error) {
+        clearTimeout(timeoutId);
+        console.error('Error loading Google Sheets script:', error);
+        delete window[callbackName];
+        document.head.removeChild(script);
+        showSaveStatus(false, "Error connecting to Google Sheets. Data saved locally.");
+        resolve(false);
+      };
+      
+      // Add the script to the page
+      document.head.appendChild(script);
+    });
   } catch (error) {
-    console.error("Error in saveForecastData:", error);
+    console.error('Error in directSaveToGoogleSheets:', error);
+    throw error;
   }
 }
 
-    // UPDATED FUNCTION: Load saved data
-    async function loadSavedData(toolId) {
+// Updated saveForecastData function
+async function saveForecastData() {
+  try {
+    console.log("Saving forecast data...");
+
+    // Always get the latest data from inputs
+    const incomeStatementData = {
+      revenue: calculateSectionTotal('incomeStatementTool', 'Revenue'),
+      expenses: calculateSectionTotal('incomeStatementTool', 'Expenses'),
+      inputs: await saveInputData('incomeStatementTool')  // This captures the current state of the inputs
+    };
+
+    const cashFlowData = {
+      inflows: calculateSectionTotal('cashFlowTool', 'Cash Inflows'),
+      outflows: calculateSectionTotal('cashFlowTool', 'Cash Outflows'),
+      inputs: await saveInputData('cashFlowTool')  // This captures the current state of the inputs
+    };
+
+    // Force save directly to ensure immediate saving
+    await directSaveToGoogleSheets(incomeStatementData, cashFlowData);
+    
+    // Also update localStorage as backup
+    FinanceToolsData.saveForecastDataLocally(incomeStatementData, cashFlowData);
+    
+    console.log("Forecast data saved successfully");
+    return true;
+  } catch (error) {
+    console.error('Error saving forecast data:', error);
+    showSaveStatus(false, "Error saving data: " + error.message);
+    return false;
+  }
+}
+
+// Initialize Wix if it's available
+function initWixIntegration() {
+  if (typeof wix !== 'undefined') {
+    try {
+      // Listen for user login events
+      wix.users.onLogin((user) => {
+        console.log('User logged in, refreshing data');
+        loadAllData();
+      });
+
+      // Check if user is already logged in
+      wix.users.currentUser
+        .then(user => {
+          if (user) {
+            console.log('User already logged in');
+          }
+        })
+        .catch(error => {
+          console.warn('Error checking current user:', error);
+        });
+    } catch (error) {
+      console.warn('Error initializing Wix integration:', error);
+    }
+  } else {
+    console.log("Wix APIs not detected");
+  }
+}
+
+// Load all data from storage (both localStorage and Wix if available)
+async function loadAllData() {
+  console.log("Loading all data");
+  // Load forecast data
+  await loadSavedData('incomeStatementTool');
+  await loadSavedData('cashFlowTool');
+}
+
+// Event handlers for inputs
+function attachSaveHandlers() {
+  // Attach input handlers to all forecast inputs
+  document.querySelectorAll('.forecast-input').forEach(input => {
+    // Remove any existing handlers to avoid duplicates
+    input.removeEventListener('blur', handleInputBlur);
+    // Add new handler
+    input.addEventListener('blur', handleInputBlur);
+  });
+  
+  // Also handle tax rate changes
+  document.querySelectorAll('[id$="-tax-rate"]').forEach(input => {
+    input.removeEventListener('blur', handleInputBlur);
+    input.addEventListener('blur', handleInputBlur);
+  });
+}
+
+// Handler for input blur events
+function handleInputBlur(event) {
+  const toolId = event.target.dataset.tool || 
+                (event.target.id.includes('incomeStatementTool') ? 'incomeStatementTool' : 'cashFlowTool');
+  
+  // Calculate totals
+  calculateTotals(toolId);
+  
+  // Force an immediate save
+  saveForecastData();
+}
+
+(function() {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const tooltips = {
+    'Sales': 'Revenue generated from primary business activities',
+    'Other Income': 'Revenue from secondary sources like investments or asset sales',
+    'Cost of Goods Sold': 'Direct costs of producing goods or services',
+    'Salaries': 'Employee wages and related expenses',
+    'Rent': 'Costs for leasing business space',
+    'Utilities': 'Expenses for electricity, water, internet, etc.',
+    'Marketing': 'Advertising and promotional expenses',
+    'Other Expenses': 'Miscellaneous business expenses',
+    'Investments': 'Capital received from investors',
+    'Expenses': 'Total operational expenses',
+    'Equipment Purchases': 'Costs for buying equipment and assets',
+    'Loan Payments': 'Repayment of loans including interest'
+  };
+  const tools = {
+    incomeStatementTool: {
+      table: 'incomeStatementTable',
+      chart: 'incomeStatementChart',
+      sections: [
+        { name: 'Revenue', rows: ['Sales', 'Other Income'] },
+        { name: 'Expenses', rows: ['Cost of Goods Sold', 'Salaries', 'Rent', 'Utilities', 'Marketing', 'Other Expenses'] }
+      ]
+    },
+    cashFlowTool: {
+      table: 'cashFlowTable',
+      chart: 'cashFlowChart',
+      sections: [
+        { name: 'Cash Inflows', rows: ['Sales', 'Investments', 'Other Income'] },
+        { name: 'Cash Outflows', rows: ['Expenses', 'Equipment Purchases', 'Loan Payments'] }
+      ]
+    }
+  };
+
+  // UPDATED FUNCTION: Save input data
+  async function saveInputData(toolId) {
+    const tool = tools[toolId];
+    const inputData = {};
+
+    tool.sections.forEach(section => {
+      inputData[section.name] = {};
+
+      section.rows.forEach(row => {
+        const inputs = document.querySelectorAll(`[data-tool="${toolId}"][data-section="${section.name}"][data-category="${row}"]`);
+        inputData[section.name][row] = Array.from(inputs).map(input => input.value || '');
+      });
+    });
+    return inputData;
+  }
+
+  // UPDATED FUNCTION: Load saved data
+  async function loadSavedData(toolId) {
+    try {
+      console.log(`Loading saved data for ${toolId}...`);
+
+      // Initialize the table if it doesn't exist
+      if (!document.getElementById(tools[toolId].table) || document.getElementById(tools[toolId].table).rows.length === 0) {
+        initializeTool(toolId);
+      }
+
+      // First try to load from Wix DB if available
+      let toolData = null;
+
       try {
-        console.log(`Loading saved data for ${toolId}...`);
-
-        // Initialize the table if it doesn't exist
-        if (!document.getElementById(tools[toolId].table) || document.getElementById(tools[toolId].table).rows.length === 0) {
-          initializeTool(toolId);
+        const wixData = await FinanceToolsData.loadFromWixDB('forecastData');
+        if (wixData) {
+          toolData = toolId === 'incomeStatementTool' ? wixData.incomeStatement : wixData.cashFlow;
         }
+      } catch (wixError) {
+        console.error('Error loading from Wix DB:', wixError);
+      }
 
-        // First try to load from Wix DB if available
-        let toolData = null;
-
-        try {
-          const wixData = await FinanceToolsData.loadFromWixDB('forecastData');
-          if (wixData) {
-            toolData = toolId === 'incomeStatementTool' ? wixData.incomeStatement : wixData.cashFlow;
-          }
-        } catch (wixError) {
-          console.error('Error loading from Wix DB:', wixError);
+      // If no Wix data, try localStorage
+      if (!toolData || !toolData.inputs) {
+        const savedData = FinanceToolsData.loadForecastData();
+        if (savedData) {
+          toolData = toolId === 'incomeStatementTool' ? savedData.incomeStatement : savedData.cashFlow;
         }
+      }
 
-        // If no Wix data, try localStorage
-        if (!toolData || !toolData.inputs) {
-          const savedData = FinanceToolsData.loadForecastData();
-          if (savedData) {
-            toolData = toolId === 'incomeStatementTool' ? savedData.incomeStatement : savedData.cashFlow;
-          }
-        }
+      // If we have data, populate the inputs
+      if (toolData && toolData.inputs) {
+        console.log(`Found data for ${toolId}:`, toolData);
 
-        // If we have data, populate the inputs
-        if (toolData && toolData.inputs) {
-          console.log(`Found data for ${toolId}:`, toolData);
-
-          Object.entries(toolData.inputs).forEach(([section, rows]) => {
-            Object.entries(rows).forEach(([row, values]) => {
-              values.forEach((value, index) => {
-                const input = document.querySelector(`[data-tool="${toolId}"][data-section="${section}"][data-category="${row}"][data-col="${index}"]`);
-                if (input) {
-                  input.value = value;
-                  console.log(`Set ${toolId} input [${section}][${row}][${index}] = ${value}`);
-                } else {
-                  console.warn(`Input not found for ${toolId} [${section}][${row}][${index}]`);
-                }
-              });
+        Object.entries(toolData.inputs).forEach(([section, rows]) => {
+          Object.entries(rows).forEach(([row, values]) => {
+            values.forEach((value, index) => {
+              const input = document.querySelector(`[data-tool="${toolId}"][data-section="${section}"][data-category="${row}"][data-col="${index}"]`);
+              if (input) {
+                input.value = value;
+                console.log(`Set ${toolId} input [${section}][${row}][${index}] = ${value}`);
+              } else {
+                console.warn(`Input not found for ${toolId} [${section}][${row}][${index}]`);
+              }
             });
           });
+        });
 
-          calculateTotals(toolId);
-          showSaveStatus(true, "Data loaded successfully");
-          return true;
-        } else {
-          console.log(`No data found for ${toolId}`);
-        }
-
-        return false;
-      } catch (error) {
-        console.error('Error loading forecast data:', error);
-        showSaveStatus(false, "Error loading data: " + error.message);
-        return false;
-      }
-    }
-
-    // UPDATED FUNCTION: Toggle tool
-    function toggleTool(toolId) {
-      Object.keys(tools).forEach(key => {
-        const tool = document.getElementById(key);
-        if (tool) {
-          if (key === toolId) {
-            const wasHidden = tool.style.display === 'none' || tool.style.display === '';
-            tool.style.display = wasHidden ? 'block' : 'none';
-
-            if (wasHidden) {
-              console.log(`Showing ${toolId} and loading data...`);
-              // Always load saved data when showing a tool
-              loadSavedData(toolId);
-            }
-          } else {
-            tool.style.display = 'none';
-          }
-        }
-      });
-    }
-
-    function createRow(toolId, section, category, isEditable = false) {
-      const rowId = `${toolId}-${section.replace(/\s+/g, '')}-${category.replace(/\s+/g, '')}`;
-      const tooltip = tooltips[category] || 'Custom category';
-
-      let categoryCell;
-      if (isEditable) {
-        categoryCell = `<td><input type="text" class="category-input" value="${category}" onchange="updateRowCategory('${toolId}', '${rowId}', this.value)" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"></td>`;
+        calculateTotals(toolId);
+        showSaveStatus(true, "Data loaded successfully");
+        return true;
       } else {
-        categoryCell = `<td><span class="category-label" data-tooltip="${tooltip}">${category}</span></td>`;
+        console.log(`No data found for ${toolId}`);
       }
-      return `
-        <tr id="${rowId}">
-          ${categoryCell}
-          ${months.map((_, i) => `<td>
-            <input type="number" 
-              class="forecast-input" 
-              data-tool="${toolId}" 
-              data-section="${section}" 
-              data-category="${category}" 
-              data-col="${i}" 
-              onchange="calculateTotals('${toolId}')"
-            >
-          </td>`).join('')}
-          <td id="${rowId}Total">$0.00</td>
-          <td><button class="remove-btn" onclick="removeRow('${toolId}', '${rowId}')">Remove</button></td>
+
+      return false;
+    } catch (error) {
+      console.error('Error loading forecast data:', error);
+      showSaveStatus(false, "Error loading data: " + error.message);
+      return false;
+    }
+  }
+
+  // UPDATED FUNCTION: Toggle tool
+  function toggleTool(toolId) {
+    Object.keys(tools).forEach(key => {
+      const tool = document.getElementById(key);
+      if (tool) {
+        if (key === toolId) {
+          const wasHidden = tool.style.display === 'none' || tool.style.display === '';
+          tool.style.display = wasHidden ? 'block' : 'none';
+
+          if (wasHidden) {
+            console.log(`Showing ${toolId} and loading data...`);
+            // Always load saved data when showing a tool
+            loadSavedData(toolId);
+          }
+        } else {
+          tool.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  function createRow(toolId, section, category, isEditable = false) {
+    const rowId = `${toolId}-${section.replace(/\s+/g, '')}-${category.replace(/\s+/g, '')}`;
+    const tooltip = tooltips[category] || 'Custom category';
+
+    let categoryCell;
+    if (isEditable) {
+      categoryCell = `<td><input type="text" class="category-input" value="${category}" onchange="updateRowCategory('${toolId}', '${rowId}', this.value)" style="width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"></td>`;
+    } else {
+      categoryCell = `<td><span class="category-label" data-tooltip="${tooltip}">${category}</span></td>`;
+    }
+    return `
+      <tr id="${rowId}">
+        ${categoryCell}
+        ${months.map((_, i) => `<td>
+          <input type="number" 
+            class="forecast-input" 
+            data-tool="${toolId}" 
+            data-section="${section}" 
+            data-category="${category}" 
+            data-col="${i}" 
+            onchange="calculateTotals('${toolId}')"
+          >
+        </td>`).join('')}
+        <td id="${rowId}Total">$0.00</td>
+        <td><button class="remove-btn" onclick="removeRow('${toolId}', '${rowId}')">Remove</button></td>
+      </tr>`;
+  }
+
+  function updateRowCategory(toolId, rowId, newCategory) {
+    const row = document.getElementById(rowId);
+    const inputs = row.querySelectorAll('.forecast-input');
+    inputs.forEach(input => {
+      input.dataset.category = newCategory;
+    });
+    calculateTotals(toolId);
+  }
+
+  // UPDATED: Initialize tool
+  function initializeTool(toolId) {
+    console.log(`Initializing ${toolId}...`);
+    const tool = tools[toolId];
+    const table = document.getElementById(tool.table);
+
+    if (!table) {
+      console.error(`Table not found for ${toolId}`);
+      return;
+    }
+
+    if (table.rows.length === 0) {
+      console.log(`Creating table structure for ${toolId}`);
+      let html = `
+        <tr>
+          <th>Category</th>
+          ${months.map(month => `<th>${month}</th>`).join('')}
+          <th>Total</th>
+          <th>Action</th>
         </tr>`;
-    }
-
-    function updateRowCategory(toolId, rowId, newCategory) {
-      const row = document.getElementById(rowId);
-      const inputs = row.querySelectorAll('.forecast-input');
-      inputs.forEach(input => {
-        input.dataset.category = newCategory;
-      });
-      calculateTotals(toolId);
-    }
-
-    // UPDATED: Initialize tool
-    function initializeTool(toolId) {
-      console.log(`Initializing ${toolId}...`);
-      const tool = tools[toolId];
-      const table = document.getElementById(tool.table);
-
-      if (!table) {
-        console.error(`Table not found for ${toolId}`);
-        return;
-      }
-
-      if (table.rows.length === 0) {
-        console.log(`Creating table structure for ${toolId}`);
-        let html = `
-          <tr>
-            <th>Category</th>
-            ${months.map(month => `<th>${month}</th>`).join('')}
-            <th>Total</th>
-            <th>Action</th>
+      tool.sections.forEach(section => {
+        html += `
+          <tr class="section-header">
+            <td colspan="${months.length + 3}">${section.name} <button class="add-row-btn" onclick="addRow('${toolId}', '${section.name}')">Add Row</button></td>
           </tr>`;
-        tool.sections.forEach(section => {
-          html += `
-            <tr class="section-header">
-              <td colspan="${months.length + 3}">${section.name} <button class="add-row-btn" onclick="addRow('${toolId}', '${section.name}')">Add Row</button></td>
-            </tr>`;
-          section.rows.forEach(row => {
-            html += createRow(toolId, section.name, row);
-          });
-          html += `
-            <tr class="total-row">
-              <td>Total ${section.name}</td>
-              ${months.map((_, i) => `<td id="total${section.name.replace(/\s+/g, '')}${toolId}${i}">$0.00</td>`).join('')}
-              <td id="total${section.name.replace(/\s+/g, '')}${toolId}Total">$0.00</td>
-              <td></td>
-            </tr>`;
+        section.rows.forEach(row => {
+          html += createRow(toolId, section.name, row);
         });
         html += `
           <tr class="total-row">
-            <td>${toolId === 'cashFlowTool' ? 'Net Cash Flow' : 'Net Income'}</td>
-            ${months.map((_, i) => `<td id="net${toolId}${i}">$0.00</td>`).join('')}
-            <td id="net${toolId}Total">$0.00</td>
+            <td>Total ${section.name}</td>
+            ${months.map((_, i) => `<td id="total${section.name.replace(/\s+/g, '')}${toolId}${i}">$0.00</td>`).join('')}
+            <td id="total${section.name.replace(/\s+/g, '')}${toolId}Total">$0.00</td>
             <td></td>
           </tr>`;
-        table.innerHTML = html;
-      }
-    }
-
-    function addRow(toolId, section) {
-      const table = document.getElementById(tools[toolId].table);
-      const sectionRows = Array.from(table.querySelectorAll(`tr`)).filter(row => 
-        row.id && row.id.startsWith(`${toolId}-${section.replace(/\s+/g, '')}-`)
-      );
-      const newRowNumber = sectionRows.length + 1;
-      const newCategory = `New Item ${newRowNumber}`;
-      const newRowHtml = createRow(toolId, section, newCategory, true);
-
-      const totalRow = Array.from(table.rows).find(row => 
-        row.cells[0].textContent.trim() === `Total ${section}`
-      );
-
-      if (totalRow) {
-        totalRow.insertAdjacentHTML('beforebegin', newRowHtml);
-        calculateTotals(toolId);
-      }
-    }
-
-    function removeRow(toolId, rowId) {
-      const row = document.getElementById(rowId);
-      if (row) {
-        row.remove();
-        calculateTotals(toolId);
-      }
-    }
-
-    function calculateSectionTotal(toolId, sectionName) {
-      const totalElement = document.getElementById(`total${sectionName.replace(/\s+/g, '')}${toolId}Total`);
-      return totalElement ? parseFloat(totalElement.textContent.replace('$', '')) || 0 : 0;
-    }
-
-    // UPDATED: Calculate totals function with improved precision
-    function calculateTotals(toolId) {
-      console.log(`Calculating totals for ${toolId}...`);
-
-      const tool = tools[toolId];
-      if (!tool) {
-        console.error(`Tool not found: ${toolId}`);
-        return;
-      }
-
-      const totals = {};
-      tool.sections.forEach(section => {
-        totals[section.name] = Array(months.length).fill(0);
       });
+      html += `
+        <tr class="total-row">
+          <td>${toolId === 'cashFlowTool' ? 'Net Cash Flow' : 'Net Income'}</td>
+          ${months.map((_, i) => `<td id="net${toolId}${i}">$0.00</td>`).join('')}
+          <td id="net${toolId}Total">$0.00</td>
+          <td></td>
+        </tr>`;
+      table.innerHTML = html;
+    }
+    
+    // Attach event handlers to inputs after initializing
+    setTimeout(attachSaveHandlers, 100);
+  }
 
-      document.querySelectorAll(`[data-tool="${toolId}"]`).forEach(input => {
-        const value = parseFloat(input.value) || 0;
-        const col = parseInt(input.dataset.col);
-        const section = input.dataset.section;
-        const category = input.dataset.category;
-        const rowId = `${toolId}-${section.replace(/\s+/g, '')}-${category.replace(/\s+/g, '')}`;
+  function addRow(toolId, section) {
+    const table = document.getElementById(tools[toolId].table);
+    const sectionRows = Array.from(table.querySelectorAll(`tr`)).filter(row => 
+      row.id && row.id.startsWith(`${toolId}-${section.replace(/\s+/g, '')}-`)
+    );
+    const newRowNumber = sectionRows.length + 1;
+    const newCategory = `New Item ${newRowNumber}`;
+    const newRowHtml = createRow(toolId, section, newCategory, true);
 
-        totals[section] = totals[section] || Array(months.length).fill(0);
-        totals[section][col] += value;
-        const rowTotalCell = document.getElementById(`${rowId}Total`);
-        if (rowTotalCell) {
-          const rowInputs = document.querySelectorAll(`[data-tool="${toolId}"][data-section="${section}"][data-category="${category}"]`);
-          const rowTotal = Array.from(rowInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
-          rowTotalCell.textContent = `$${rowTotal.toFixed(2)}`;
-        }
-      });
+    const totalRow = Array.from(table.rows).find(row => 
+      row.cells[0].textContent.trim() === `Total ${section}`
+    );
 
-      tool.sections.forEach(section => {
-        months.forEach((_, i) => {
-          const totalElement = document.getElementById(`total${section.name.replace(/\s+/g, '')}${toolId}${i}`);
-          if (totalElement) {
-            totalElement.textContent = `$${totals[section.name][i].toFixed(2)}`;
-          }
-        });
-        const sectionTotal = totals[section.name].reduce((a, b) => a + b, 0);
-        const totalElement = document.getElementById(`total${section.name.replace(/\s+/g, '')}${toolId}Total`);
-        if (totalElement) {
-          totalElement.textContent = `$${sectionTotal.toFixed(2)}`;
-        }
-      });
+    if (totalRow) {
+      totalRow.insertAdjacentHTML('beforebegin', newRowHtml);
+      calculateTotals(toolId);
+      // Re-attach handlers to the new input elements
+      setTimeout(attachSaveHandlers, 100);
+    }
+  }
 
-      const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
-      const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
-      const netTotals = Array(months.length).fill(0);
+  function removeRow(toolId, rowId) {
+    const row = document.getElementById(rowId);
+    if (row) {
+      row.remove();
+      calculateTotals(toolId);
+    }
+  }
+
+  function calculateSectionTotal(toolId, sectionName) {
+    const totalElement = document.getElementById(`total${sectionName.replace(/\s+/g, '')}${toolId}Total`);
+    return totalElement ? parseFloat(totalElement.textContent.replace('$', '')) || 0 : 0;
+  }
+
+  // UPDATED: Calculate totals function with immediate save
+  function calculateTotals(toolId) {
+    console.log(`Calculating totals for ${toolId}...`);
+
+    const tool = tools[toolId];
+    if (!tool) {
+      console.error(`Tool not found: ${toolId}`);
+      return;
+    }
+
+    const totals = {};
+    tool.sections.forEach(section => {
+      totals[section.name] = Array(months.length).fill(0);
+    });
+
+    document.querySelectorAll(`[data-tool="${toolId}"]`).forEach(input => {
+      const value = parseFloat(input.value) || 0;
+      const col = parseInt(input.dataset.col);
+      const section = input.dataset.section;
+      const category = input.dataset.category;
+      const rowId = `${toolId}-${section.replace(/\s+/g, '')}-${category.replace(/\s+/g, '')}`;
+
+      totals[section] = totals[section] || Array(months.length).fill(0);
+      totals[section][col] += value;
+      const rowTotalCell = document.getElementById(`${rowId}Total`);
+      if (rowTotalCell) {
+        const rowInputs = document.querySelectorAll(`[data-tool="${toolId}"][data-section="${section}"][data-category="${category}"]`);
+        const rowTotal = Array.from(rowInputs).reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+        rowTotalCell.textContent = `$${rowTotal.toFixed(2)}`;
+      }
+    });
+
+    tool.sections.forEach(section => {
       months.forEach((_, i) => {
-        const revenue = totals[tool.sections[0].name][i];
-        const expenses = totals[tool.sections[1].name][i];
-        const profit = revenue - expenses;
-        const tax = profit > 0 ? profit * taxRate : 0;
-        netTotals[i] = profit - tax;
-
-        const netElement = document.getElementById(`net${toolId}${i}`);
-        if (netElement) {
-          netElement.textContent = `$${netTotals[i].toFixed(2)}`;
+        const totalElement = document.getElementById(`total${section.name.replace(/\s+/g, '')}${toolId}${i}`);
+        if (totalElement) {
+          totalElement.textContent = `$${totals[section.name][i].toFixed(2)}`;
         }
       });
-      const totalNet = netTotals.reduce((a, b) => a + b, 0);
-      const netTotalElement = document.getElementById(`net${toolId}Total`);
-      if (netTotalElement) {
-        netTotalElement.textContent = `$${totalNet.toFixed(2)}`;
+      const sectionTotal = totals[section.name].reduce((a, b) => a + b, 0);
+      const totalElement = document.getElementById(`total${section.name.replace(/\s+/g, '')}${toolId}Total`);
+      if (totalElement) {
+        totalElement.textContent = `$${sectionTotal.toFixed(2)}`;
       }
-      updateChart(toolId, netTotals);
-      updateAnalysis(toolId, totals, netTotals);
+    });
 
-      // Save data whenever calculations are updated
-      saveForecastData();
-      console.log(`${toolId} calculations completed and data saved`);
+    const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
+    const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
+    const netTotals = Array(months.length).fill(0);
+    months.forEach((_, i) => {
+      const revenue = totals[tool.sections[0].name][i];
+      const expenses = totals[tool.sections[1].name][i];
+      const profit = revenue - expenses;
+      const tax = profit > 0 ? profit * taxRate : 0;
+      netTotals[i] = profit - tax;
+
+      const netElement = document.getElementById(`net${toolId}${i}`);
+      if (netElement) {
+        netElement.textContent = `$${netTotals[i].toFixed(2)}`;
+      }
+    });
+    const totalNet = netTotals.reduce((a, b) => a + b, 0);
+    const netTotalElement = document.getElementById(`net${toolId}Total`);
+    if (netTotalElement) {
+      netTotalElement.textContent = `$${totalNet.toFixed(2)}`;
     }
+    updateChart(toolId, netTotals);
+    updateAnalysis(toolId, totals, netTotals);
 
-    function updateChart(toolId, data) {
-      const ctx = document.getElementById(tools[toolId].chart);
-      if (!ctx) return;
-      if (window[`${toolId}Chart`]) {
-        window[`${toolId}Chart`].destroy();
-      }
-      window[`${toolId}Chart`] = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: months,
-          datasets: [{
-            label: toolId === 'cashFlowTool' ? 'Net Cash Flow' : 'Net Income (After Tax)',
-            data: data,
-            backgroundColor: data.map(value => value >= 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
-            borderColor: data.map(value => value >= 0 ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)'),
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'Amount ($)'
-              }
+    // Save data with a small delay to ensure calculations are complete
+    setTimeout(() => {
+      saveForecastData();
+    }, 500);
+    
+    console.log(`${toolId} calculations completed and data saved`);
+  }
+
+  function updateChart(toolId, data) {
+    const ctx = document.getElementById(tools[toolId].chart);
+    if (!ctx) return;
+    if (window[`${toolId}Chart`]) {
+      window[`${toolId}Chart`].destroy();
+    }
+    window[`${toolId}Chart`] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [{
+          label: toolId === 'cashFlowTool' ? 'Net Cash Flow' : 'Net Income (After Tax)',
+          data: data,
+          backgroundColor: data.map(value => value >= 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 99, 132, 0.6)'),
+          borderColor: data.map(value => value >= 0 ? 'rgb(75, 192, 192)' : 'rgb(255, 99, 132)'),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Amount ($)'
             }
           }
         }
-      });
-    }
-
-    function updateAnalysis(toolId, totals, netTotals) {
-      const tool = document.getElementById(toolId);
-      const financialSummary = tool.querySelector('.financial-summary');
-      const scenarios = tool.querySelector('.scenarios');
-      const keyTakeaways = tool.querySelector('.key-takeaways');
-      const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
-      const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
-      const totalRevenue = totals[tools[toolId].sections[0].name].reduce((a, b) => a + b, 0);
-      const totalExpenses = totals[tools[toolId].sections[1].name].reduce((a, b) => a + b, 0);
-      const profitBeforeTax = totalRevenue - totalExpenses;
-      const taxAmount = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
-      const netTotal = profitBeforeTax - taxAmount;
-      const profitMargin = totalRevenue > 0 ? (netTotal / totalRevenue) * 100 : 0;
-      financialSummary.innerHTML = `
-        <div>Total ${tools[toolId].sections[0].name}: $${totalRevenue.toFixed(2)}</div>
-        <div>Total ${tools[toolId].sections[1].name}: $${totalExpenses.toFixed(2)}</div>
-        <div>Profit Before Tax: $${profitBeforeTax.toFixed(2)}</div>
-        <div>Tax: $${taxAmount.toFixed(2)}</div>
-        <div>Net ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Income'}: $${netTotal.toFixed(2)}</div>
-        <div>${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Profit'} Margin: ${profitMargin.toFixed(2)}%</div>
-      `;
-      scenarios.innerHTML = `
-        <div>
-          <button class="scenario-button" onclick="runScenario('${toolId}', 1.1, 1)">Scenario 1: 10% ${tools[toolId].sections[0].name} Increase</button>
-          <div id="${toolId}-scenario1"></div>
-        </div>
-        <div>
-          <button class="scenario-button" onclick="runScenario('${toolId}', 1, 0.9)">Scenario 2: 10% ${tools[toolId].sections[1].name} Reduction</button>
-          <div id="${toolId}-scenario2"></div>
-        </div>
-      `;
-      let takeaways = [
-        `Your ${toolId === 'cashFlowTool' ? 'cash flow' : 'profit'} margin is ${profitMargin.toFixed(2)}%.`,
-        `Total ${tools[toolId].sections[0].name} for the year is $${totalRevenue.toFixed(2)}.`,
-        `Total ${tools[toolId].sections[1].name} for the year is $${totalExpenses.toFixed(2)}.`,
-        `Total tax amount (${(taxRate * 100).toFixed(1)}% rate) is $${taxAmount.toFixed(2)}.`
-      ];
-      if (toolId === 'cashFlowTool') {
-        takeaways.push(netTotal >= 0 
-          ? "Your cash flow is positive, which is good for business stability." 
-          : "Your cash flow is negative. Consider ways to improve cash inflows or reduce outflows.");
-      } else {
-        takeaways.push(netTotal >= 0 
-          ? "Your business is profitable after tax. Consider reinvesting profits for growth." 
-          : "Your business is operating at a loss. Look for ways to increase revenue or reduce expenses.");
       }
-      keyTakeaways.innerHTML = takeaways.map(takeaway => `<li>${takeaway}</li>`).join('');
+    });
+  }
+
+  function updateAnalysis(toolId, totals, netTotals) {
+    const tool = document.getElementById(toolId);
+    const financialSummary = tool.querySelector('.financial-summary');
+    const scenarios = tool.querySelector('.scenarios');
+    const keyTakeaways = tool.querySelector('.key-takeaways');
+    const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
+    const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
+    const totalRevenue = totals[tools[toolId].sections[0].name].reduce((a, b) => a + b, 0);
+    const totalExpenses = totals[tools[toolId].sections[1].name].reduce((a, b) => a + b, 0);
+    const profitBeforeTax = totalRevenue - totalExpenses;
+    const taxAmount = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
+    const netTotal = profitBeforeTax - taxAmount;
+    const profitMargin = totalRevenue > 0 ? (netTotal / totalRevenue) * 100 : 0;
+    // Continuing from previous part
+    financialSummary.innerHTML = `
+      <div>Total ${tools[toolId].sections[0].name}: $${totalRevenue.toFixed(2)}</div>
+      <div>Total ${tools[toolId].sections[1].name}: $${totalExpenses.toFixed(2)}</div>
+      <div>Profit Before Tax: $${profitBeforeTax.toFixed(2)}</div>
+      <div>Tax: $${taxAmount.toFixed(2)}</div>
+      <div>Net ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Income'}: $${netTotal.toFixed(2)}</div>
+      <div>${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Profit'} Margin: ${profitMargin.toFixed(2)}%</div>
+    `;
+    scenarios.innerHTML = `
+      <div>
+        <button class="scenario-button" onclick="runScenario('${toolId}', 1.1, 1)">Scenario 1: 10% ${tools[toolId].sections[0].name} Increase</button>
+        <div id="${toolId}-scenario1"></div>
+      </div>
+      <div>
+        <button class="scenario-button" onclick="runScenario('${toolId}', 1, 0.9)">Scenario 2: 10% ${tools[toolId].sections[1].name} Reduction</button>
+        <div id="${toolId}-scenario2"></div>
+      </div>
+    `;
+    let takeaways = [
+      `Your ${toolId === 'cashFlowTool' ? 'cash flow' : 'profit'} margin is ${profitMargin.toFixed(2)}%.`,
+      `Total ${tools[toolId].sections[0].name} for the year is $${totalRevenue.toFixed(2)}.`,
+      `Total ${tools[toolId].sections[1].name} for the year is $${totalExpenses.toFixed(2)}.`,
+      `Total tax amount (${(taxRate * 100).toFixed(1)}% rate) is $${taxAmount.toFixed(2)}.`
+    ];
+    if (toolId === 'cashFlowTool') {
+      takeaways.push(netTotal >= 0 
+        ? "Your cash flow is positive, which is good for business stability." 
+        : "Your cash flow is negative. Consider ways to improve cash inflows or reduce outflows.");
+    } else {
+      takeaways.push(netTotal >= 0 
+        ? "Your business is profitable after tax. Consider reinvesting profits for growth." 
+        : "Your business is operating at a loss. Look for ways to increase revenue or reduce expenses.");
     }
+    keyTakeaways.innerHTML = takeaways.map(takeaway => `<li>${takeaway}</li>`).join('');
+  }
 
-    function runScenario(toolId, revenueMultiplier, expenseMultiplier) {
-      const tool = tools[toolId];
-      const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
-      const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
-      const totalRevenue = calculateSectionTotal(toolId, tool.sections[0].name) * revenueMultiplier;
-      const totalExpenses = calculateSectionTotal(toolId, tool.sections[1].name) * expenseMultiplier;
-      const profitBeforeTax = totalRevenue - totalExpenses;
-      const taxAmount = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
-      const netTotal = profitBeforeTax - taxAmount;
-      const profitMargin = totalRevenue > 0 ? (netTotal / totalRevenue) * 100 : 0;
-      const scenarioDiv = document.getElementById(`${toolId}-scenario${revenueMultiplier !== 1 ? '1' : '2'}`);
-      scenarioDiv.innerHTML = `
-        <div>New Total ${tool.sections[0].name}: $${totalRevenue.toFixed(2)}</div>
-        <div>New Total ${tool.sections[1].name}: $${totalExpenses.toFixed(2)}</div>
-        <div>New Profit Before Tax: $${profitBeforeTax.toFixed(2)}</div>
-        <div>New Tax Amount: $${taxAmount.toFixed(2)}</div>
-        <div>New Net ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Income'}: $${netTotal.toFixed(2)}</div>
-        <div>New ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Profit'} Margin: ${profitMargin.toFixed(2)}%</div>
-      `;
-    }
+  function runScenario(toolId, revenueMultiplier, expenseMultiplier) {
+    const tool = tools[toolId];
+    const taxRateInput = document.getElementById(`${toolId}-tax-rate`);
+    const taxRate = (parseFloat(taxRateInput?.value) || 25) / 100;
+    const totalRevenue = calculateSectionTotal(toolId, tool.sections[0].name) * revenueMultiplier;
+    const totalExpenses = calculateSectionTotal(toolId, tool.sections[1].name) * expenseMultiplier;
+    const profitBeforeTax = totalRevenue - totalExpenses;
+    const taxAmount = profitBeforeTax > 0 ? profitBeforeTax * taxRate : 0;
+    const netTotal = profitBeforeTax - taxAmount;
+    const profitMargin = totalRevenue > 0 ? (netTotal / totalRevenue) * 100 : 0;
+    const scenarioDiv = document.getElementById(`${toolId}-scenario${revenueMultiplier !== 1 ? '1' : '2'}`);
+    scenarioDiv.innerHTML = `
+      <div>New Total ${tool.sections[0].name}: $${totalRevenue.toFixed(2)}</div>
+      <div>New Total ${tool.sections[1].name}: $${totalExpenses.toFixed(2)}</div>
+      <div>New Profit Before Tax: $${profitBeforeTax.toFixed(2)}</div>
+      <div>New Tax Amount: $${taxAmount.toFixed(2)}</div>
+      <div>New Net ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Income'}: $${netTotal.toFixed(2)}</div>
+      <div>New ${toolId === 'cashFlowTool' ? 'Cash Flow' : 'Profit'} Margin: ${profitMargin.toFixed(2)}%</div>
+    `;
+  }
 
-    // Event listener setup - UPDATED
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log("Document loaded, initializing finance tools");
+  // Event listener setup - UPDATED
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log("Document loaded, initializing finance tools");
 
-      // Set up tile click handlers
-      document.getElementById('incomeStatementTile').addEventListener('click', function() {
-        toggleTool('incomeStatementTool');
-      });
-
-      document.getElementById('cashFlowTile').addEventListener('click', function() {
-        toggleTool('cashFlowTool');
-      });
-
-      // Initialize Wix integration
-      initWixIntegration();
-
-      // Pre-initialize tools for faster loading later
-      initializeTool('incomeStatementTool');
-      initializeTool('cashFlowTool');
-
-      // Try to load data for the first tool right away
-      setTimeout(() => {
-        loadSavedData('incomeStatementTool').then(() => {
-          console.log("Initial load complete");
-        });
-      }, 500);
-
-      // For debugging - show localStorage on page load
-      console.log("Current localStorage:", {
-        forecast: localStorage.getItem('financeTools_forecastData'),
-        actuals: localStorage.getItem('financeTools_actualsData'),
-      });
+    // Set up tile click handlers
+    document.getElementById('incomeStatementTile').addEventListener('click', function() {
+      toggleTool('incomeStatementTool');
     });
 
-    // Make necessary functions global
-    window.calculateTotals = calculateTotals;
-    window.toggleTool = toggleTool;
-    window.addRow = addRow;
-    window.removeRow = removeRow;
-    window.runScenario = runScenario;
-    window.updateRowCategory = updateRowCategory;
-    window.loadSavedData = loadSavedData;
-    window.calculateSectionTotal = calculateSectionTotal;
-    window.saveForecastData = saveForecastData;
-    window.loadAllData = loadAllData;
-    window.initializeTool = initializeTool;
+    document.getElementById('cashFlowTile').addEventListener('click', function() {
+      toggleTool('cashFlowTool');
+    });
 
-    // Add a periodic data check to ensure data persistence
-    setInterval(() => {
-      const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
-      if (activeTool) {
-        const toolId = activeTool.id;
-        console.log(`Performing periodic save for active tool: ${toolId}`);
-        saveForecastData();
-      }
-    }, 300000); // Check every minute
-  })();
-</script>
-</body>
-</html>
+    // Initialize Wix integration
+    initWixIntegration();
+
+    // Pre-initialize tools for faster loading later
+    initializeTool('incomeStatementTool');
+    initializeTool('cashFlowTool');
+
+    // Try to load data for the first tool right away
+    setTimeout(() => {
+      loadSavedData('incomeStatementTool').then(() => {
+        console.log("Initial load complete");
+      });
+    }, 500);
+
+    // Set up a MutationObserver to handle dynamically added elements
+    const observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Re-attach handlers when new nodes are added
+          attachSaveHandlers();
+        }
+      });
+    });
+    
+    // Start observing tables for changes
+    document.querySelectorAll('#incomeStatementTable, #cashFlowTable').forEach(table => {
+      observer.observe(table, { childList: true, subtree: true });
+    });
+
+    // For debugging - show localStorage on page load
+    console.log("Current localStorage:", {
+      forecast: localStorage.getItem('financeTools_forecastData'),
+      actuals: localStorage.getItem('financeTools_actualsData'),
+    });
+  });
+
+  // Make necessary functions global
+  window.calculateTotals = calculateTotals;
+  window.toggleTool = toggleTool;
+  window.addRow = addRow;
+  window.removeRow = removeRow;
+  window.runScenario = runScenario;
+  window.updateRowCategory = updateRowCategory;
+  window.loadSavedData = loadSavedData;
+  window.calculateSectionTotal = calculateSectionTotal;
+  window.saveForecastData = saveForecastData;
+  window.loadAllData = loadAllData;
+  window.initializeTool = initializeTool;
+  window.attachSaveHandlers = attachSaveHandlers;
+  window.handleInputBlur = handleInputBlur;
+
+  // Add a periodic data check to ensure data persistence
+  setInterval(() => {
+    const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
+    if (activeTool) {
+      const toolId = activeTool.id;
+      console.log(`Performing periodic save for active tool: ${toolId}`);
+      saveForecastData();
+    }
+  }, 300000); // Check every 5 minutes
+})();
