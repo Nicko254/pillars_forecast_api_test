@@ -347,7 +347,7 @@ async function directSaveToGoogleSheets(incomeStatementData, cashFlowData) {
     };
     
     // Updated Google Apps Script URL
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbwNVyPQf0eEGmlD0dqceVWfbJ8pCbIWQvZTGkgqivd54782XQMlSDI6dI83k-QLMEn_/exec';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbxgEWtMMztcB-udNjeFci549VEIcYewWiRO-OneWBBjYvIVAEU8gd1AAgJ-hXPLEIvM/exec';
     
     // Create a query string from our data
     const queryString = `?userId=${encodeURIComponent(userId)}&data=${encodeURIComponent(JSON.stringify(data))}`;
@@ -1001,6 +1001,7 @@ function handleInputBlur(event) {
   window.initializeTool = initializeTool;
   window.attachSaveHandlers = attachSaveHandlers;
   window.handleInputBlur = handleInputBlur;
+  window.saveInputData = saveInputData; 
 
   // Add a periodic data check to ensure data persistence
   setInterval(() => {
@@ -1012,4 +1013,16 @@ function handleInputBlur(event) {
     }
   }, 300000); // Check every 5 minutes
 })();
-  window.saveInputData = saveInputData;
+// Add a periodic data check to ensure data persistence
+  setInterval(() => {
+    const activeTool = document.querySelector('.forecast-tool[style*="display: block"]');
+    if (activeTool) {
+      const toolId = activeTool.id;
+      console.log(`Performing periodic save for active tool: ${toolId}`);
+      saveForecastData();
+    }
+  }, 300000); // Check every 5 minutes
+})(); // This is the closing of the IIFE
+</script>
+</body>
+</html>
