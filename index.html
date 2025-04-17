@@ -487,25 +487,69 @@ async function saveForecastData() {
   }
 }
 
-// Initialize Wix if it's available
+// Initialize Wix if it's available - Enhanced with user ID management
 function initWixIntegration() {
   if (typeof wix !== 'undefined') {
     try {
       // Listen for user login events
       wix.users.onLogin((user) => {
-        console.log('User logged in, refreshing data');
-        loadAllData();
+        console.log('User logged in, retrieving associated data');
+        
+        // Get the Wix user ID
+        wix.currentMember.getMember()
+          .then(member => {
+            const wixUserId = member.id;
+            console.log('Wix user ID:', wixUserId);
+            
+            // Use the Wix user ID as the key for our tool's user ID
+            const savedId = localStorage.getItem(`wixUser_${wixUserId}`);
+            
+            if (savedId) {
+              // If we have a saved ID, use it
+              localStorage.setItem('financeTools_userId', savedId);
+              console.log('Retrieved associated user ID:', savedId);
+            } else {
+              // If not, create a new ID and save the association
+              const newId = 'user_' + new Date().getTime();
+              localStorage.setItem('financeTools_userId', newId);
+              localStorage.setItem(`wixUser_${wixUserId}`, newId);
+              console.log('Created new user ID:', newId);
+            }
+            
+            // Load all the user's data
+            loadAllData();
+          })
+          .catch(error => {
+            console.error('Error getting Wix member:', error);
+            // Fall back to local ID if there's an error
+            const localId = getUserId();
+            console.log('Using local user ID:', localId);
+            loadAllData();
+          });
       });
 
       // Check if user is already logged in
-      wix.users.currentUser
-        .then(user => {
-          if (user) {
-            console.log('User already logged in');
+      wix.currentMember.getMember()
+        .then(member => {
+          if (member) {
+            console.log('User already logged in, ID:', member.id);
+            const savedId = localStorage.getItem(`wixUser_${member.id}`);
+            
+            if (savedId) {
+              localStorage.setItem('financeTools_userId', savedId);
+              console.log('Using saved ID for logged-in user:', savedId);
+            } else {
+              const newId = getUserId(); // This will either get existing or generate new
+              localStorage.setItem(`wixUser_${member.id}`, newId);
+              console.log('Associating existing ID with Wix user:', newId);
+            }
+            
+            // Load data for the current user
+            loadAllData();
           }
         })
         .catch(error => {
-          console.warn('Error checking current user:', error);
+          console.warn('Error checking current member:', error);
         });
     } catch (error) {
       console.warn('Error initializing Wix integration:', error);
@@ -796,7 +840,7 @@ function handleInputBlur(event) {
     setTimeout(attachSaveHandlers, 100);
   }
 
- function addRow(toolId, section) {
+  function addRow(toolId, section) {
     const table = document.getElementById(tools[toolId].table);
     const sectionRows = Array.from(table.querySelectorAll(`tr`)).filter(row => 
       row.id && row.id.startsWith(`${toolId}-${section.replace(/\s+/g, '')}-`)
@@ -1010,7 +1054,7 @@ function handleInputBlur(event) {
     `;
   }
 
-  // Event listener setup - UPDATED
+  // Event listener setup - UPDATED with Wix integration
   document.addEventListener('DOMContentLoaded', function() {
     console.log("Document loaded, initializing finance tools");
 
